@@ -10,9 +10,12 @@
     "test": "jest --forceExit --detectOpenHandles --verbose",
     "test:watch": "jest --watch",
     "test-ci": "jest --forceExit --detectOpenHandles --maxWorkers=2",
-    "check-types": "tsc"
+    "check-types": "tsc",
+    "i18n-extract": "formatjs extract 'src/**/*.{js,jsx,ts,tsx}' --out-file i18n/tmp.json && formatjs compile i18n/tmp.json --out-file i18n/en.json && rm i18n/tmp.json"
   },
   "devDependencies": {
+    "@formatjs/cli": "^4.8.2",
+    "@formatjs/ts-transformer": "^3.9.2",
     "@babel/cli": "7.10.4",
     "@babel/core": "7.10.4",
     "@babel/plugin-proposal-class-properties": "7.10.4",
@@ -59,6 +62,7 @@
   },
   "dependencies": {
     "@mattermost/compass-icons": "^0.1.10",
+    "react-intl": "^5.20.0",
     "@types/react-select": "3.0.23",
     "core-js": "3.6.5",
     "mattermost-redux": "5.23.0",
