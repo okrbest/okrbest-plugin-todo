@@ -1,5 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import {injectIntl} from 'react-intl';
 
 import {
     makeStyleFromTheme,
@@ -18,8 +19,9 @@ import {getProfilePicture} from '../../utils';
 
 const PostUtils = window.PostUtils;
 
-export default class AddIssue extends React.PureComponent {
+class AddIssue extends React.PureComponent {
     static propTypes = {
+        intl: PropTypes.object.isRequired,
         visible: PropTypes.bool.isRequired,
         message: PropTypes.string.isRequired,
         postPermalink: PropTypes.string,
@@ -133,7 +135,7 @@ export default class AddIssue extends React.PureComponent {
     }
 
     render() {
-        const {assignee, visible, theme} = this.props;
+        const {assignee, visible, theme, intl} = this.props;
 
         if (!visible) {
             return null;
@@ -162,7 +164,7 @@ export default class AddIssue extends React.PureComponent {
                                 <React.Fragment>
                                     <TextareaAutosize
                                         style={style.textareaResizeMessage}
-                                        placeholder='Enter a title'
+                                        placeholder={intl.formatMessage({id: 'AddIssue.placeholder.title', defaultMessage: 'Enter a title'})}
                                         autoFocus={true}
                                         onKeyDown={(e) => this.onKeyDown(e)}
                                         value={formattedMessage}
@@ -170,7 +172,7 @@ export default class AddIssue extends React.PureComponent {
                                     />
                                     <TextareaAutosize
                                         style={style.textareaResizeDescription}
-                                        placeholder='Enter a description'
+                                        placeholder={intl.formatMessage({id: 'AddIssue.placeholder.description', defaultMessage: 'Enter a description'})}
                                         onKeyDown={(e) => this.onKeyDown(e)}
                                         value={description}
                                         onChange={(e) => this.handleInputChange(e, 'description')}
@@ -186,12 +188,10 @@ export default class AddIssue extends React.PureComponent {
                                         checked={this.state.attachToThread}
                                         onChange={this.handleAttachChange}
                                     />
-                                    <b>{' Add to thread'}</b>
+                                    <b>{' '}{intl.formatMessage({id: 'AddIssue.attachToThread', defaultMessage: 'Add to thread'})}</b>
                                 </label>
                                 <div className='help-text'>
-                                    {
-                                        'Select to have the Todo Bot respond to the thread when the attached todo is added, modified or completed.'
-                                    }
+                                    {intl.formatMessage({id: 'AddIssue.attachToThread.help', defaultMessage: 'Select to have the Todo Bot respond to the thread when the attached todo is added, modified or completed.'})}
                                 </div>
                             </div>
                         )}
@@ -202,7 +202,7 @@ export default class AddIssue extends React.PureComponent {
                                     icon={<CompassIcon icon='account-outline'/>}
                                     onClick={() => this.props.openAssigneeModal('')}
                                 >
-                                    {'Assign to…'}
+                                    {intl.formatMessage({id: 'AddIssue.assignTo', defaultMessage: 'Assign to…'})}
                                 </Chip>
                             )}
                             {assignee && (
@@ -232,10 +232,8 @@ export default class AddIssue extends React.PureComponent {
                                         sendTo: selected?.username,
                                     })
                                 }
-                                label={'Send to user'}
-                                helpText={
-                                    'Select a user if you want to send this todo.'
-                                }
+                                label={intl.formatMessage({id: 'AddIssue.sendToUser', defaultMessage: 'Send to user'})}
+                                helpText={intl.formatMessage({id: 'AddIssue.sendToUser.help', defaultMessage: 'Select a user if you want to send this todo.'})}
                                 placeholder={''}
                                 theme={theme}
                             />
@@ -251,7 +249,7 @@ export default class AddIssue extends React.PureComponent {
                         size='small'
                         onClick={this.close}
                     >
-                        {'Cancel'}
+                        {intl.formatMessage({id: 'AddIssue.button.cancel', defaultMessage: 'Cancel'})}
                     </Button>
                     <Button
                         emphasis='primary'
@@ -259,7 +257,7 @@ export default class AddIssue extends React.PureComponent {
                         onClick={this.submit}
                         disabled={!message}
                     >
-                        {'Save'}
+                        {intl.formatMessage({id: 'AddIssue.button.save', defaultMessage: 'Save'})}
                     </Button>
                 </div>
             </div>
@@ -342,3 +340,5 @@ const getStyle = makeStyleFromTheme((theme) => {
         },
     };
 });
+
+export default injectIntl(AddIssue);

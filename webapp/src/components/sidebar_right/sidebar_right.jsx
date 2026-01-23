@@ -3,6 +3,7 @@
 
 import React from 'react';
 import PropTypes from 'prop-types';
+import {injectIntl} from 'react-intl';
 import Scrollbars from 'react-custom-scrollbars';
 import {Tooltip, OverlayTrigger} from 'react-bootstrap';
 
@@ -49,8 +50,9 @@ const MyListName = 'my';
 const OutListName = 'out';
 const InListName = 'in';
 
-export default class SidebarRight extends React.PureComponent {
+class SidebarRight extends React.PureComponent {
     static propTypes = {
+        intl: PropTypes.object.isRequired,
         myIssues: PropTypes.array.isRequired,
         inIssues: PropTypes.array.isRequired,
         outIssues: PropTypes.array.isRequired,
@@ -132,22 +134,23 @@ export default class SidebarRight extends React.PureComponent {
     }
 
     render() {
+        const {intl} = this.props;
         const style = getStyle();
         let todos = [];
-        let listHeading = 'My Todos';
+        let listHeading = intl.formatMessage({id: 'SidebarRight.listHeading.myTodos', defaultMessage: 'My Todos'});
         let addButton = '';
         let inboxList = [];
 
         switch (this.state.list) {
         case MyListName:
             todos = this.props.myIssues;
-            addButton = 'Add Todo';
+            addButton = intl.formatMessage({id: 'SidebarRight.button.addTodo', defaultMessage: 'Add Todo'});
             inboxList = this.props.inIssues;
             break;
         case OutListName:
             todos = this.props.outIssues;
-            listHeading = 'Sent Todos';
-            addButton = 'Request a Todo from someone';
+            listHeading = intl.formatMessage({id: 'SidebarRight.listHeading.sentTodos', defaultMessage: 'Sent Todos'});
+            addButton = intl.formatMessage({id: 'SidebarRight.button.requestTodo', defaultMessage: 'Request a Todo from someone'});
             break;
         }
 
@@ -172,7 +175,7 @@ export default class SidebarRight extends React.PureComponent {
                         onClick={() => this.toggleInbox()}
                     >
                         {actionName}
-                        <div>{`Incoming Todos (${inboxList.length})`}</div>
+                        <div>{intl.formatMessage({id: 'SidebarRight.incomingTodos', defaultMessage: 'Incoming Todos ({count})'}, {count: inboxList.length})}</div>
                     </div>
                     {this.state.showInbox ?
                         <ToDoIssues
@@ -207,7 +210,7 @@ export default class SidebarRight extends React.PureComponent {
                     onClick={() => this.toggleMy()}
                 >
                     {actionName}
-                    {`My Todos (${todos.length})`}
+                    {intl.formatMessage({id: 'SidebarRight.myTodos', defaultMessage: 'My Todos ({count})'}, {count: todos.length})}
                 </div>
             );
         }
@@ -238,11 +241,11 @@ export default class SidebarRight extends React.PureComponent {
                                 <MenuItem
                                     onClick={() => this.openList(MyListName)}
                                     action={() => this.openList(MyListName)}
-                                    text={'My Todos'}
+                                    text={intl.formatMessage({id: 'SidebarRight.listHeading.myTodos', defaultMessage: 'My Todos'})}
                                 />
                                 <MenuItem
                                     action={() => this.openList(OutListName)}
-                                    text={'Sent Todos'}
+                                    text={intl.formatMessage({id: 'SidebarRight.listHeading.sentTodos', defaultMessage: 'Sent Todos'})}
                                 />
                             </Menu>
                         </MenuWrapper>
@@ -315,3 +318,5 @@ const getStyle = () => {
         },
     };
 };
+
+export default injectIntl(SidebarRight);
