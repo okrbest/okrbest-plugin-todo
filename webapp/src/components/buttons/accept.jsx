@@ -1,15 +1,18 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import {useIntl} from 'react-intl';
 
 import Button from 'src/widget/buttons/button';
 
 const AcceptButton = (props) => {
+    const intl = useIntl();
+
     return (
         <Button
             emphasis={'secondary'}
             onClick={() => props.accept(props.issueId)}
         >
-            {'Add to my list'}
+            {intl.formatMessage({id: 'Button.accept', defaultMessage: 'Add to my list'})}
         </Button>
     );
 };

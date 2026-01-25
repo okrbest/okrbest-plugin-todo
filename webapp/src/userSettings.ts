@@ -2,7 +2,7 @@
 // See LICENSE.txt for license information.
 
 export enum UserSettingKey {
-    Language = 'todo-plugin-language',
+    Language = 'language',
 }
 
 export class UserSettings {

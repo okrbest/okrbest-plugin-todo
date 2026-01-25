@@ -4,12 +4,14 @@
 import React from 'react';
 import {Tooltip, OverlayTrigger} from 'react-bootstrap';
 import PropTypes from 'prop-types';
+import {injectIntl} from 'react-intl';
 import {makeStyleFromTheme, changeOpacity} from 'mattermost-redux/utils/theme_utils';
 
 import {RHSStates} from '../../constants';
 
-export default class SidebarButtons extends React.PureComponent {
+class SidebarButtons extends React.PureComponent {
     static propTypes = {
+        intl: PropTypes.object.isRequired,
         theme: PropTypes.object.isRequired,
         isTeamSidebar: PropTypes.bool,
         showRHSPlugin: PropTypes.func.isRequired,
@@ -36,6 +38,7 @@ export default class SidebarButtons extends React.PureComponent {
     }
 
     render() {
+        const {intl} = this.props;
         const style = getStyle(this.props.theme);
         const isTeamSidebar = this.props.isTeamSidebar;
 
@@ -57,7 +60,7 @@ export default class SidebarButtons extends React.PureComponent {
                 <OverlayTrigger
                     key='myTodosLink'
                     placement={placement}
-                    overlay={<Tooltip id='myTodosTooltip'>{'Your Todos'}</Tooltip>}
+                    overlay={<Tooltip id='myTodosTooltip'>{intl.formatMessage({id: 'SidebarButtons.tooltip.yourTodos', defaultMessage: 'Your Todos'})}</Tooltip>}
                 >
                     <a
                         style={button}
@@ -73,7 +76,7 @@ export default class SidebarButtons extends React.PureComponent {
                 <OverlayTrigger
                     key='incomingTodosLink'
                     placement={placement}
-                    overlay={<Tooltip id='incomingTodosTooltip'>{'Incoming Todos'}</Tooltip>}
+                    overlay={<Tooltip id='incomingTodosTooltip'>{intl.formatMessage({id: 'SidebarButtons.tooltip.incomingTodos', defaultMessage: 'Incoming Todos'})}</Tooltip>}
                 >
                     <a
                         onClick={() => {
@@ -89,7 +92,7 @@ export default class SidebarButtons extends React.PureComponent {
                 <OverlayTrigger
                     key='outgoingTodosLink'
                     placement={placement}
-                    overlay={<Tooltip id='outgoingTodosTooltip'>{'Outgoing Todos'}</Tooltip>}
+                    overlay={<Tooltip id='outgoingTodosTooltip'>{intl.formatMessage({id: 'SidebarButtons.tooltip.outgoingTodos', defaultMessage: 'Outgoing Todos'})}</Tooltip>}
                 >
                     <a
                         onClick={() => {
@@ -132,3 +135,5 @@ const getStyle = makeStyleFromTheme((theme) => {
         },
     };
 });
+
+export default injectIntl(SidebarButtons);

@@ -3,6 +3,7 @@
 
 import React from 'react';
 import PropTypes from 'prop-types';
+import {injectIntl} from 'react-intl';
 
 import {
     makeStyleFromTheme,
@@ -14,14 +15,14 @@ import Tada from '../../illustrations/tada';
 
 function ToDoIssues(props) {
     const style = getStyle(props.theme);
-    const {theme, siteURL, accept, complete, list, remove, bump, addVisible, issues} = props;
+    const {theme, siteURL, accept, complete, list, remove, bump, addVisible, issues, intl} = props;
 
     let emptyState = (
         <div style={style.completed.container}>
             <Tada/>
-            <h3 style={style.completed.title}>{'All tasks completed'}</h3>
+            <h3 style={style.completed.title}>{intl.formatMessage({id: 'TodoIssues.completed.title', defaultMessage: 'All tasks completed'})}</h3>
             <p style={style.completed.subtitle}>
-                {'Nicely done, you\'ve finished all of your tasks! Why not reward yourself with a little break?'}
+                {intl.formatMessage({id: 'TodoIssues.completed.subtitle', defaultMessage: 'Nicely done, you\'ve finished all of your tasks! Why not reward yourself with a little break?'})}
             </p>
         </div>
     );
@@ -50,6 +51,7 @@ function ToDoIssues(props) {
 }
 
 ToDoIssues.propTypes = {
+    intl: PropTypes.object.isRequired,
     addVisible: PropTypes.bool.isRequired,
     remove: PropTypes.func.isRequired,
     issues: PropTypes.arrayOf(PropTypes.object),
@@ -101,4 +103,4 @@ const getStyle = makeStyleFromTheme((theme) => {
     };
 });
 
-export default ToDoIssues;
+export default injectIntl(ToDoIssues);
