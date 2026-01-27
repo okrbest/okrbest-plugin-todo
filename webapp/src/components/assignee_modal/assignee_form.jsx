@@ -1,5 +1,6 @@
 import React, {useState, useCallback} from 'react';
 import PropTypes from 'prop-types';
+import {useIntl} from 'react-intl';
 
 import AutocompleteSelector from '../user_selector/autocomplete_selector';
 import Button from '../../widget/buttons/button';
@@ -21,6 +22,7 @@ const AssigneeForm = (
         editingTodo,
     },
 ) => {
+    const intl = useIntl();
     const [assignee, setAssignee] = useState();
     useEscapeKey(close);
     const submit = useCallback(() => {
@@ -51,7 +53,7 @@ const AssigneeForm = (
             style={style.backdrop}
         >
             <div style={style.modal}>
-                <h1 style={style.heading}>{'Assign todo to…'}</h1>
+                <h1 style={style.heading}>{intl.formatMessage({id: 'AssigneeModal.title', defaultMessage: 'Assign todo to…'})}</h1>
                 <IconButton
                     size='medium'
                     style={style.closeIcon}
@@ -75,7 +77,7 @@ const AssigneeForm = (
                         size='medium'
                         onClick={closeModal}
                     >
-                        {'Cancel'}
+                        {intl.formatMessage({id: 'AssigneeModal.button.cancel', defaultMessage: 'Cancel'})}
                     </Button>
                     <Button
                         emphasis='primary'
@@ -83,7 +85,7 @@ const AssigneeForm = (
                         onClick={submit}
                         disabled={!assignee}
                     >
-                        {'Assign'}
+                        {intl.formatMessage({id: 'AssigneeModal.button.assign', defaultMessage: 'Assign'})}
                     </Button>
                 </div>
             </div>

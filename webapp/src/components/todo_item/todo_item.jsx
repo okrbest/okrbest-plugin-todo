@@ -1,5 +1,6 @@
 import React, {useState, useRef, useCallback} from 'react';
 import PropTypes from 'prop-types';
+import {useIntl} from 'react-intl';
 
 import {changeOpacity, makeStyleFromTheme} from 'mattermost-redux/utils/theme_utils';
 import TextareaAutosize from 'react-textarea-autosize';
@@ -25,6 +26,7 @@ const PostUtils = window.PostUtils; // import the post utilities
 
 function TodoItem(props) {
     const {issue, theme, siteURL, accept, complete, list, remove, bump, openTodoToast, openAssigneeModal, setEditingTodo, editIssue} = props;
+    const intl = useIntl();
     const [done, setDone] = useState(false);
     const [editTodo, setEditTodo] = useState(false);
     const [message, setMessage] = useState(issue.message);
@@ -57,18 +59,16 @@ function TodoItem(props) {
     const issueDescription = PostUtils.messageHtmlToComponent(htmlFormattedDescription);
 
     let listPositionMessage = '';
-    let createdMessage = 'Created ';
+    let createdMessage = intl.formatMessage({id: 'TodoItem.created', defaultMessage: 'Created'});
     if (issue.user) {
         if (issue.list === '') {
-            createdMessage = 'Sent to ' + issue.user;
-            listPositionMessage =
-                'Accepted. On position ' + (issue.position + 1) + '.';
+            createdMessage = intl.formatMessage({id: 'TodoItem.sentTo', defaultMessage: 'Sent to {user}'}, {user: issue.user});
+            listPositionMessage = intl.formatMessage({id: 'TodoItem.position.accepted', defaultMessage: 'Accepted. On position {position}.'}, {position: issue.position + 1});
         } else if (issue.list === 'in') {
-            createdMessage = 'Sent to ' + issue.user;
-            listPositionMessage =
-                'In Inbox on position ' + (issue.position + 1) + '.';
+            createdMessage = intl.formatMessage({id: 'TodoItem.sentTo', defaultMessage: 'Sent to {user}'}, {user: issue.user});
+            listPositionMessage = intl.formatMessage({id: 'TodoItem.position.inbox', defaultMessage: 'In Inbox on position {position}.'}, {position: issue.position + 1});
         } else if (issue.list === 'out') {
-            createdMessage = 'Received from ' + issue.user;
+            createdMessage = intl.formatMessage({id: 'TodoItem.receivedFrom', defaultMessage: 'Received from {user}'}, {user: issue.user});
             listPositionMessage = '';
         }
     }
@@ -109,7 +109,7 @@ function TodoItem(props) {
     const removeTimeout = useRef(null);
 
     const completeToast = useCallback(() => {
-        openTodoToast({icon: 'check', message: 'Todo completed', undo: undoCompleteTodo});
+        openTodoToast({icon: 'check', message: intl.formatMessage({id: 'TodoItem.toast.completed', defaultMessage: 'Todo completed'}), undo: undoCompleteTodo});
 
         setHidden(true);
 
@@ -140,7 +140,7 @@ function TodoItem(props) {
     );
 
     const removeTodo = useCallback(() => {
-        openTodoToast({icon: 'trash-can-outline', message: 'Todo deleted', undo: undoRemoveTodo});
+        openTodoToast({icon: 'trash-can-outline', message: intl.formatMessage({id: 'TodoItem.toast.deleted', defaultMessage: 'Todo deleted'}), undo: undoRemoveTodo});
         setHidden(true);
         removeTimeout.current = setTimeout(() => {
             remove(issue.id);
@@ -170,7 +170,7 @@ function TodoItem(props) {
                             <div>
                                 <TextareaAutosize
                                     style={style.textareaResizeMessage}
-                                    placeholder='Enter a title'
+                                    placeholder={intl.formatMessage({id: 'TodoItem.placeholder.title', defaultMessage: 'Enter a title'})}
                                     value={message}
                                     autoFocus={true}
                                     onKeyDown={(e) => onKeyDown(e)}
@@ -178,7 +178,7 @@ function TodoItem(props) {
                                 />
                                 <TextareaAutosize
                                     style={style.textareaResizeDescription}
-                                    placeholder='Enter a description'
+                                    placeholder={intl.formatMessage({id: 'TodoItem.placeholder.description', defaultMessage: 'Enter a description'})}
                                     value={description}
                                     onKeyDown={(e) => onKeyDown(e)}
                                     onChange={(e) => setDescription(e.target.value)}
@@ -220,25 +220,25 @@ function TodoItem(props) {
                             {canAccept(list) && (
                                 <MenuItem
                                     action={() => accept(issue.id)}
-                                    text='Accept todo'
+                                    text={intl.formatMessage({id: 'TodoItem.menu.accept', defaultMessage: 'Accept todo'})}
                                     icon='check'
                                 />
                             )}
                             {canBump(list, issue.list) && (
                                 <MenuItem
-                                    text='Bump'
+                                    text={intl.formatMessage({id: 'TodoItem.menu.bump', defaultMessage: 'Bump'})}
                                     icon='bell-outline'
                                     action={() => bump(issue.id)}
                                 />
                             )}
                             <MenuItem
-                                text='Edit todo'
+                                text={intl.formatMessage({id: 'TodoItem.menu.edit', defaultMessage: 'Edit todo'})}
                                 icon='pencil-outline'
                                 action={() => setEditTodo(true)}
                                 shortcut='e'
                             />
                             <MenuItem
-                                text='Assign to…'
+                                text={intl.formatMessage({id: 'TodoItem.menu.assign', defaultMessage: 'Assign to…'})}
                                 icon='account-plus-outline'
                                 action={editAssignee}
                                 shortcut='a'
@@ -246,7 +246,7 @@ function TodoItem(props) {
                             {canRemove(list, issue.list) && (
                                 <MenuItem
                                     action={removeTodo}
-                                    text='Delete todo'
+                                    text={intl.formatMessage({id: 'TodoItem.menu.delete', defaultMessage: 'Delete todo'})}
                                     icon='trash-can-outline'
                                     shortcut='d'
                                 />
@@ -266,14 +266,14 @@ function TodoItem(props) {
                         size='small'
                         onClick={() => setEditTodo(false)}
                     >
-                        {'Cancel'}
+                        {intl.formatMessage({id: 'TodoItem.button.cancel', defaultMessage: 'Cancel'})}
                     </Button>
                     <Button
                         emphasis='primary'
                         size='small'
                         onClick={saveEditedTodo}
                     >
-                        {'Save'}
+                        {intl.formatMessage({id: 'TodoItem.button.save', defaultMessage: 'Save'})}
                     </Button>
                 </div>
             )}

@@ -1,12 +1,15 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import {useIntl} from 'react-intl';
 
 const BumpButton = (props) => {
+    const intl = useIntl();
+
     return (
         <button
             className='btn btn-primary'
             onClick={() => props.bump(props.issueId)}
-        >{'Bump'}</button>
+        >{intl.formatMessage({id: 'Button.bump', defaultMessage: 'Bump'})}</button>
     );
 };
 
