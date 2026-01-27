@@ -7,7 +7,6 @@ import {IntlProvider} from 'react-intl';
 import {getCurrentUser} from 'mattermost-redux/selectors/entities/users';
 
 import {getMessages} from '../i18n';
-import {UserSettings} from '../userSettings';
 
 interface Props {
     children: React.ReactNode;
@@ -16,14 +15,9 @@ interface Props {
 const IntlProviderWrapper: React.FC<Props> = ({children}) => {
     const currentUser = useSelector(getCurrentUser);
 
-    // 1순위: localStorage 'language'
-    // 2순위: Mattermost 사용자 언어 설정
-    // 3순위: 기본값 'en'
-    let language = UserSettings.language;
-    if (!language) {
-        const mattermostLocale = currentUser?.locale || 'en';
-        language = mattermostLocale.split('-')[0];
-    }
+    // Mattermost 사용자 언어 설정 사용 (기본값: ko)
+    const mattermostLocale = currentUser?.locale || 'ko';
+    const language = mattermostLocale.split('-')[0];
 
     return (
         <IntlProvider

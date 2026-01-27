@@ -7,7 +7,7 @@ import Root from './components/root';
 import AssigneeModal from './components/assignee_modal';
 import SidebarRight from './components/sidebar_right';
 import IntlProviderWrapper from './components/intl_provider_wrapper';
-import {getMessages, getCurrentLanguage} from './i18n';
+import {getMessages} from './i18n';
 
 import {openAddCard, setShowRHSAction, telemetry, updateConfig, setHideTeamSidebar, fetchAllIssueLists} from './actions';
 import reducer from './reducer';
@@ -30,11 +30,15 @@ const WrappedSidebarRight = (props) => (
 
 export default class Plugin {
     initialize(registry, store) {
-        // intl 객체 생성 (메뉴 텍스트 등에 사용)
+        // Mattermost 사용자 언어 설정에서 locale 가져오기
+        const state = store.getState();
+        const currentUser = state.entities?.users?.profiles?.[state.entities?.users?.currentUserId];
+        const locale = (currentUser?.locale || 'ko').split('-')[0];
+
         const cache = createIntlCache();
         const intl = createIntl({
-            locale: getCurrentLanguage(),
-            messages: getMessages(getCurrentLanguage()),
+            locale,
+            messages: getMessages(locale),
         }, cache);
 
         const {toggleRHSPlugin, showRHSPlugin} = registry.registerRightHandSidebarComponent(WrappedSidebarRight, intl.formatMessage({id: 'SidebarRight.listHeading.myTodos', defaultMessage: 'Todo List'}));
