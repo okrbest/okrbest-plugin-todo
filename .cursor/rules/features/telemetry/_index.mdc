@@ -1,0 +1,115 @@
+---
+description: 텔레메트리(사용자 행동 추적) 도메인
+globs: ["server/telemetry.go", "server/plugin.go"]
+---
+
+# 텔레메트리 (Telemetry) 도메인
+
+## 개요
+
+Rudder 기반 텔레메트리로 사용자 행동을 추적합니다.
+서버 직접 추적과 프론트엔드에서 서버를 경유한 추적 두 가지 경로가 있습니다.
+
+## 관련 파일
+
+| 영역 | 파일 |
+|------|------|
+| 추적 함수 | `server/telemetry.go` |
+| 클라이언트 초기화 | `server/plugin.go` `OnActivate()` |
+| 트래커 초기화 | `server/configuration.go` `OnConfigurationChange()` |
+| 프론트 텔레메트리 API | `server/plugin.go` `handleTelemetry()` |
+| 요청 DTO | `server/serializer.go` `TelemetryAPIRequest` |
+| 웹앱 호출 | `webapp/src/actions.js` `telemetry()` |
+
+## 아키텍처
+
+```
+서버 액션 → p.track*() → tracker.TrackUserEvent()
+                                   ↓
+                              Rudder 서버
+
+웹앱 액션 → POST /telemetry → p.trackFrontend() → tracker.TrackUserEvent("frontend_{event}")
+```
+
+## 추적 이벤트
+
+### 서버 직접 추적
+
+| 함수 | 이벤트명 | 속성 |
+|------|---------|------|
+| `trackCommand` | `command` | `command` (서브커맨드명) |
+| `trackAddIssue` | `add_issue` | `source` (command/webapp), `attached` (포스트 연동) |
+| `trackSendIssue` | `send_issue` | `source`, `attached` |
+| `trackCompleteIssue` | `complete_issue` | - |
+| `trackRemoveIssue` | `remove_issue` | - |
+| `trackAcceptIssue` | `accept_issue` | - |
+| `trackEditIssue` | `edit_issue` | - |
+| `trackChangeAssignment` | `change_issue_assignment` | - |
+| `trackBumpIssue` | `bump_issue` | - |
+| `trackDailySummary` | `daily_summary_sent` | - |
+
+### 프론트엔드 경유 추적
+
+```javascript
+telemetry('post_action_click')     // 포스트 드롭다운 클릭
+telemetry('channel_header_click')  // 채널 헤더 버튼 클릭
+```
+
+서버에서 `frontend_` 접두사 추가: `frontend_post_action_click`
+
+## 소스 구분
+
+```go
+type telemetrySource string
+const (
+    sourceCommand telemetrySource = "command"  // 슬래시 커맨드
+    sourceWebapp  telemetrySource = "webapp"   // 웹앱 UI
+)
+```
+
+## 텔레메트리 API
+
+```
+POST /telemetry
+Content-Type: application/json
+
+{
+    "event": "이벤트명",
+    "properties": { "key": "value" }
+}
+```
+
+`TelemetryAPIRequest.IsValid()`: `event` 필드 필수.
+
+## 초기화
+
+```go
+// OnActivate
+p.telemetryClient, err = telemetry.NewRudderClient()
+
+// OnConfigurationChange
+p.tracker = telemetry.NewTracker(
+    p.telemetryClient, diagnosticId, serverVersion,
+    manifest.Id, manifest.Version, "todo",
+    telemetry.NewTrackerConfig(p.API.GetConfig()), logger,
+)
+
+// OnDeactivate
+p.telemetryClient.Close()
+```
+
+## 새 이벤트 추가 시
+
+1. `telemetry.go`에 `track*` 함수 추가
+2. 해당 핸들러/커맨드에서 `p.track*()` 호출
+3. 프론트엔드 이벤트는 `webapp/src/actions.js`에서 `telemetry('event_name')` 호출
+
+---
+
+## Q&A 목록
+
+> 개발 중 생긴 질문들이 `q-{주제}.mdc` 파일로 이 폴더에 추가됩니다.
+
+| 질문 | 파일 |
+|------|------|
+| (새 질문이 생기면 여기에 추가) | |

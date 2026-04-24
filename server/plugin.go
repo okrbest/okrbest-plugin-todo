@@ -13,8 +13,11 @@ import (
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
 	"github.com/mattermost/mattermost/server/public/pluginapi"
+	"github.com/mattermost/mattermost/server/public/pluginapi/cluster"
 	"github.com/mattermost/mattermost/server/public/pluginapi/experimental/telemetry"
 	"github.com/pkg/errors"
+
+	"github.com/mattermost/mattermost-plugin-todo/server/sqlstore"
 )
 
 const (
@@ -73,6 +76,8 @@ type Plugin struct {
 
 	listManager ListManager
 
+	sqlStore *sqlstore.SQLStore
+
 	telemetryClient telemetry.Client
 	tracker         telemetry.Tracker
 }
@@ -97,7 +102,33 @@ func (p *Plugin) OnActivate() error {
 	}
 	p.BotUserID = botID
 
-	p.listManager = NewListManager(p.API)
+	apiClient := sqlstore.NewClient(p.client, p.API)
+	sqlStore, err := sqlstore.New(apiClient)
+	if err != nil {
+		return errors.Wrap(err, "failed creating the SQL store")
+	}
+	p.sqlStore = sqlStore
+
+	mutex, err := cluster.NewMutex(p.API, "TODO_dbMutex")
+	if err != nil {
+		return errors.Wrap(err, "failed creating cluster mutex")
+	}
+	if err := func() error {
+		mutex.Lock()
+		defer mutex.Unlock()
+
+		if err := sqlStore.RunMigrations(); err != nil {
+			return errors.Wrap(err, "failed to run migrations")
+		}
+		if err := sqlStore.MigrateFromKV(p.API); err != nil {
+			p.API.LogWarn("KV to DB migration encountered an error", "error", err.Error())
+		}
+		return nil
+	}(); err != nil {
+		return err
+	}
+
+	p.listManager = NewListManager(p.API, NewSQLListStore(sqlStore))
 
 	p.initializeAPI()
 
@@ -239,7 +270,7 @@ func (p *Plugin) handleAdd(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if receiver.Id == userID {
-		_, err = p.listManager.AddIssue(userID, addRequest.Message, addRequest.Description, addRequest.PostID, addRequest.PostPermalink)
+		_, err = p.listManager.AddIssue(userID, addRequest.Message, addRequest.PostPermalink, addRequest.Description, addRequest.PostID)
 		if err != nil {
 			p.API.LogError(ErrorMsgAddIssue, "err", err.Error())
 			p.handleErrorWithCode(w, http.StatusInternalServerError, ErrorMsgAddIssue, err)

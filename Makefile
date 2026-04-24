@@ -11,6 +11,7 @@ DEFAULT_GOOS := $(shell go env GOOS)
 DEFAULT_GOARCH := $(shell go env GOARCH)
 
 export GO111MODULE=on
+export NODE_OPTIONS=--openssl-legacy-provider
 
 # We need to export GOBIN to allow it to be set
 # for processes spawned from the Makefile

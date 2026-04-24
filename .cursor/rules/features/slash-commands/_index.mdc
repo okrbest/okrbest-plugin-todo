@@ -1,0 +1,75 @@
+---
+description: /todo 슬래시 커맨드 도메인
+globs: ["server/command.go"]
+---
+
+# 슬래시 커맨드 (/todo) 도메인
+
+## 개요
+
+`/todo` 트리거로 Mattermost 채팅에서 할 일을 관리합니다.
+`OnActivate`에서 `RegisterCommand(getCommand())`로 등록됩니다.
+
+## 관련 파일
+
+| 영역 | 파일 |
+|------|------|
+| 커맨드 정의 | `server/command.go` |
+| 커맨드 등록 | `server/plugin.go` `OnActivate()` |
+
+## 서브 커맨드
+
+| 커맨드 | 핸들러 | 인자 | 설명 |
+|--------|--------|------|------|
+| `/todo` | `runListCommand` | - | 내 Todo 목록 표시 |
+| `/todo add [msg]` | `runAddCommand` | message | 할 일 추가 |
+| `/todo list [my\|in\|out]` | `runListCommand` | 선택적 | 지정 목록 조회 |
+| `/todo pop` | `runPopCommand` | - | 최상단 할 일 제거 |
+| `/todo send @user [msg]` | `runSendCommand` | user, message | 다른 사용자에게 전송 |
+| `/todo settings` | `runSettingsCommand` | - | 현재 설정 표시 |
+| `/todo settings summary [on\|off]` | `runSettingsCommand` | on/off | 일일 리마인더 토글 |
+| `/todo settings allow_incoming_task_requests [on\|off]` | `runSettingsCommand` | on/off | 수신 허용 토글 |
+| `/todo help` | (inline) | - | 도움말 |
+
+## 핸들러 패턴
+
+핸들러 함수 시그니처: `func(args []string, extra *model.CommandArgs) (bool, error)`
+- 첫 번째 반환값 `true`: 사용자 에러 → 가이드 메시지 표시
+- 첫 번째 반환값 `false` + error: 시스템 에러 → 관리자 문의 메시지
+
+```go
+func (p *Plugin) ExecuteCommand(_ *plugin.Context, args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
+    // 1. 공백 정규화 및 인자 파싱
+    // 2. 서브커맨드 switch로 핸들러 선택
+    // 3. handler(restOfArgs, args) 실행
+    // 4. 에러 처리
+}
+```
+
+## 응답
+
+모든 커맨드 응답은 `p.postCommandResponse(args, text)`로 **Ephemeral 포스트** 전송 (해당 사용자에게만 보임).
+
+## 자동완성
+
+`getAutocompleteData()`에서 `model.AutocompleteData` 트리 구조로 정의:
+- 각 서브커맨드에 `TextArgument` 또는 `StaticListArgument` 설정
+- `list` 커맨드: `in`, `out` 항목을 StaticListArgument로 제공
+
+## 새 서브 커맨드 추가 시
+
+1. `ExecuteCommand`의 switch에 case 추가
+2. `run*Command` 핸들러 함수 구현
+3. `getAutocompleteData()`에 자동완성 데이터 추가
+4. `getHelp()`의 도움말 텍스트에 사용법 추가
+5. 필요 시 `telemetry.go`에 추적 함수 추가
+
+---
+
+## Q&A 목록
+
+> 개발 중 생긴 질문들이 `q-{주제}.mdc` 파일로 이 폴더에 추가됩니다.
+
+| 질문 | 파일 |
+|------|------|
+| (새 질문이 생기면 여기에 추가) | |

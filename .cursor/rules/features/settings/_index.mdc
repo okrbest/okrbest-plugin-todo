@@ -1,0 +1,91 @@
+---
+description: 플러그인 설정 및 사용자 환경설정 도메인
+globs: ["server/configuration.go", "server/store.go", "plugin.json"]
+---
+
+# 설정 (Settings) 도메인
+
+## 개요
+
+플러그인 전역 설정(관리자)과 사용자별 환경설정(개인)을 관리합니다.
+
+## 관련 파일
+
+| 영역 | 파일 |
+|------|------|
+| 전역 설정 | `server/configuration.go` |
+| 매니페스트 | `plugin.json` (`settings_schema`) |
+| 사용자 설정 저장 | `server/store.go` (save/get Preference 함수들) |
+| 슬래시 커맨드 | `server/command.go` (`runSettingsCommand`) |
+| 웹앱 설정 반영 | `webapp/src/actions.js` (`updateConfig`, `setHideTeamSidebar`) |
+
+## 전역 설정 (관리자)
+
+`plugin.json`의 `settings_schema`에 정의:
+
+| 키 | 타입 | 기본값 | 설명 |
+|----|------|--------|------|
+| `hide_team_sidebar` | bool | null | 팀 사이드바 버튼 숨김 여부 |
+
+### 설정 구조체
+
+```go
+type configuration struct {
+    HideTeamSidebar bool `json:"hide_team_sidebar"`
+}
+```
+
+### 설정 동시성 안전
+
+```go
+configurationLock sync.RWMutex
+// getConfiguration() → RLock
+// setConfiguration() → Lock
+```
+
+### 설정 변경 감지
+
+`OnConfigurationChange` 훅에서:
+1. `LoadPluginConfiguration`으로 새 설정 로드
+2. 클라이언트 설정이 변경되면 `sendConfigUpdateEvent()` WebSocket 발행
+3. 모든 클라이언트가 `config_update` 이벤트를 받아 UI 갱신
+
+## 사용자 환경설정 (개인)
+
+KV 스토어에 사용자별로 저장 (DB 미이관, 여전히 KV 사용):
+
+### 일일 리마인더 (`summary`)
+
+| 키 | 형식 | 기본값 |
+|----|------|--------|
+| `reminder_enabled_{userID}` | "true"/"false" | "true" (nil이면 기본 true) |
+
+설정 방법: `/todo settings summary on|off`
+
+### 수신 허용 (`allow_incoming_task_requests`)
+
+| 키 | 형식 | 기본값 |
+|----|------|--------|
+| `allow_incoming_task_{userID}` | "true"/"false" | "true" (nil이면 기본 true) |
+
+설정 방법: `/todo settings allow_incoming_task_requests on|off`
+
+**효과:** `false`로 설정하면 다른 사용자가 Todo를 보낼 수 없음. 발신자에게 "@user has blocked Todo requests" 메시지 표시.
+
+## 설정 조회 API
+
+```
+GET /config → { "hide_team_sidebar": bool }
+```
+
+클라이언트 전용 설정만 반환 (민감 정보 제외).
+
+---
+
+## Q&A 목록
+
+> 개발 중 생긴 질문들이 `q-{주제}.mdc` 파일로 이 폴더에 추가됩니다.
+
+| 질문 | 파일 |
+|------|------|
+| (새 질문이 생기면 여기에 추가) | |

@@ -1,0 +1,105 @@
+---
+description: Todo 봇 DM 및 스레드 알림 도메인
+globs: ["server/bot.go"]
+---
+
+# 봇 알림 (Bot Notifications) 도메인
+
+## 개요
+
+`todo` 봇이 DM과 스레드 답글로 사용자에게 알림을 전송합니다.
+`OnActivate`에서 `EnsureBot`으로 봇을 생성/확인합니다.
+
+## 관련 파일
+
+| 영역 | 파일 |
+|------|------|
+| 봇 메시지 | `server/bot.go` |
+| 봇 생성 | `server/plugin.go` `OnActivate()` |
+
+## 봇 정보
+
+```go
+&model.Bot{
+    Username:    "todo",
+    DisplayName: "Todo Bot",
+    Description: "Created by the Todo plugin.",
+}
+```
+
+## 알림 유형
+
+### 1. 일반 DM (`PostBotDM`)
+
+단순 텍스트 메시지를 DM으로 전송:
+
+```go
+p.PostBotDM(userID, "메시지 내용")
+```
+
+**사용 시점:**
+- 다른 사용자가 Todo 완료/제거/거절/수정 시 상대방에게 알림
+- 수신 차단 사용자에게 요청 시 발신자에게 차단 알림
+- 일일 리마인더 요약 발송
+
+### 2. 커스텀 포스트 DM (`PostBotCustomDM`)
+
+액션 버튼이 포함된 `custom_todo` 타입 포스트:
+
+```go
+p.PostBotCustomDM(receiverID, message, todoText, postPermalink, issueID)
+```
+
+포스트 Props:
+```go
+Props: map[string]interface{}{
+    "type":          "custom_todo",
+    "message":       message,
+    "todo":          todo,
+    "postPermalink": postPermalink,
+    "issueId":       issueID,
+}
+```
+
+**사용 시점:**
+- 다른 사용자로부터 Todo를 받았을 때
+- Bump 시 수신자에게 재알림
+
+### 3. 스레드 답글 (`ReplyPostBot`)
+
+원본 포스트의 스레드에 봇이 답글:
+
+```go
+p.ReplyPostBot(postID, message, todo, postPermalink)
+```
+
+**사용 시점:**
+- 포스트에서 Todo 추가 시 해당 스레드에 알림
+- Todo 완료/제거/pop 시 해당 스레드에 알림
+
+**스레드 로직:**
+- `post.RootId`가 있으면 루트 포스트에 답글
+- 없으면 해당 포스트 자체를 루트로 답글
+
+## 알림 발생 시점 정리
+
+| 액션 | 수신자 | 알림 유형 |
+|------|--------|-----------|
+| 할 일 전송 | receiver | CustomDM (수락/거절 버튼) |
+| 수락 | sender | DM ("@user accepted...") |
+| 완료 | sender (있으면) | DM ("@user completed...") |
+| 제거/거절 | 상대방 | DM ("@user removed/declined...") |
+| 편집 | 상대방 | DM ("@user modified...") |
+| Bump | receiver | CustomDM (재알림) |
+| 담당자 변경 | 새 담당자 + 기존 담당자 | CustomDM + DM |
+| 포스트 연동 | 스레드 | ReplyPostBot |
+
+---
+
+## Q&A 목록
+
+> 개발 중 생긴 질문들이 `q-{주제}.mdc` 파일로 이 폴더에 추가됩니다.
+
+| 질문 | 파일 |
+|------|------|
+| (새 질문이 생기면 여기에 추가) | |

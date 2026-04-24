@@ -1,0 +1,240 @@
+---
+description: Go 서버 코드 규칙
+globs: ["server/**/*.go"]
+---
+
+# Go 서버 코드 규칙
+
+## 아키텍처 레이어
+
+```
+Plugin (plugin.go)
+    → ListManager (list.go)           # 비즈니스 로직
+        → ListStore (인터페이스)
+            → sqlListStore (sql_list_store.go)  # SQL 어댑터 (기본)
+                → SQLStore (sqlstore/)          # PostgreSQL 접근
+            → listStore (store.go)              # KV 스토어 (레거시)
+```
+
+### 각 레이어 역할
+
+| 레이어 | 파일 | 역할 |
+|--------|------|------|
+| Plugin | `plugin.go` | HTTP 라우터, 훅, 인증, WebSocket 이벤트 |
+| ListManager | `list.go` | 할 일 비즈니스 로직 (인터페이스 + 구현체) |
+| ListStore | `list.go` (인터페이스) | 저장소 추상 인터페이스 |
+| sqlListStore | `sql_list_store.go` | SQLStore→ListStore 어댑터 (기본 사용) |
+| listStore | `store.go` | KV 스토어 CRUD (레거시, 리마인더/설정용) |
+| SQLStore | `sqlstore/` 패키지 | PostgreSQL CRUD, 마이그레이션, 대시보드 집계 |
+| Issue | `issue.go` | 도메인 모델 |
+| Serializer | `serializer.go` | API 요청 DTO, JSON 파싱, 유효성 검증 |
+| Bot | `bot.go` | 봇 DM, 커스텀 포스트, 스레드 답글 |
+| Command | `command.go` | `/todo` 슬래시 커맨드 |
+| Configuration | `configuration.go` | 설정 관리, 동시성 안전 접근 |
+| Telemetry | `telemetry.go` | Rudder 이벤트 추적 |
+
+## Plugin 구조체
+
+```go
+type Plugin struct {
+    plugin.MattermostPlugin
+    client          *pluginapi.Client
+    BotUserID       string
+    configurationLock sync.RWMutex
+    router          *mux.Router
+    configuration   *configuration
+    listManager     ListManager
+    sqlStore        *sqlstore.SQLStore  // PostgreSQL 저장소
+    telemetryClient telemetry.Client
+    tracker         telemetry.Tracker
+}
+```
+
+## OnActivate 초기화 흐름
+
+```
+1. 설정 유효성 검증
+2. pluginapi.Client 초기화
+3. EnsureBot → Todo Bot 생성/확인
+4. SQLStore 초기화 (PostgreSQL 연결)
+5. 클러스터 뮤텍스 → 스키마 마이그레이션 실행
+6. KV→DB 데이터 마이그레이션 (최초 1회, 이후 스킵)
+7. ListManager 생성 (sqlListStore 어댑터 사용)
+8. HTTP 라우터 초기화
+9. 텔레메트리 클라이언트 초기화
+10. 슬래시 커맨드 등록
+```
+
+## HTTP 요청 처리 흐름
+
+```
+1. Client → Plugin.ServeHTTP
+2. Plugin → Gorilla Mux Router
+3. Router → checkAuth 미들웨어 (Mattermost-User-ID 헤더)
+4. 핸들러:
+   - Get*PayloadFromJSON(r.Body) 로 요청 파싱
+   - request.IsValid() 로 유효성 검증
+5. 핸들러 → ListManager (비즈니스 로직)
+6. ListManager → sqlListStore → SQLStore (PostgreSQL 접근)
+7. sendRefreshEvent() 로 WebSocket 이벤트 발행
+8. 필요 시 PostBotDM/PostBotCustomDM 봇 알림
+```
+
+## 코딩 패턴
+
+### 새 API 엔드포인트 추가
+
+1. `serializer.go` — DTO 타입 + `Get*PayloadFromJSON` + `IsValid()` 정의
+2. `plugin.go` `initializeAPI()` — 라우트 등록
+3. `plugin.go` — `handle*` 핸들러 구현
+4. 필요 시 `list.go` ListManager 인터페이스 + 구현 확장
+5. `telemetry.go` — 추적 함수 추가
+
+```go
+// 핸들러 패턴
+func (p *Plugin) handleMyAction(w http.ResponseWriter, r *http.Request) {
+    userID := r.Header.Get("Mattermost-User-ID")
+    request, err := GetMyPayloadFromJSON(r.Body)
+    if err != nil {
+        p.handleErrorWithCode(w, http.StatusBadRequest, "msg", err)
+        return
+    }
+    if err = request.IsValid(); err != nil {
+        p.handleErrorWithCode(w, http.StatusBadRequest, "msg", err)
+        return
+    }
+    // 비즈니스 로직 호출
+    p.sendRefreshEvent(userID, []string{MyListKey})
+}
+```
+
+### 에러 처리
+
+```go
+p.handleErrorWithCode(w, http.StatusBadRequest, "에러 제목", err)
+p.handleErrorWithCode(w, http.StatusInternalServerError, "에러 제목", err)
+```
+
+### 로깅
+
+```go
+p.API.LogError("메시지", "key", value)
+p.API.LogWarn("메시지", "key", value)
+p.API.LogInfo("메시지")
+p.API.LogDebug("메시지", "key", value)
+```
+
+## SQL 저장소 (`sqlstore/` 패키지)
+
+### 테이블 구조
+
+**`TODO_System`** — 스키마 버전/마이그레이션 플래그 관리
+```sql
+SKey VARCHAR(64) PRIMARY KEY, SValue VARCHAR(1024)
+```
+
+**`todo_items`** — Todo 데이터 단일 테이블
+```sql
+id, user_id, list_type, message, description, post_permalink, post_id,
+status, due_date, is_pinned, assignee_id, tags,
+foreign_user_id, foreign_issue_id, create_at, update_at, completed_at
+```
+
+### 인덱스
+
+| 인덱스 | 컬럼 | 조건 |
+|--------|------|------|
+| `idx_todo_items_user_status` | `(user_id, status)` | - |
+| `idx_todo_items_user_list` | `(user_id, list_type)` | - |
+| `idx_todo_items_user_due` | `(user_id, due_date)` | `WHERE status='open'` |
+| `idx_todo_items_completed_at` | `(user_id, completed_at)` | `WHERE status='done'` |
+| `idx_todo_items_assignee` | `(assignee_id, status)` | - |
+
+### sqlListStore 어댑터 (`sql_list_store.go`)
+
+ListStore 인터페이스를 SQLStore 호출로 변환:
+- `SaveIssue` → `SQLStore.SaveTodoItem` (UPSERT)
+- `AddReference` → `SQLStore.SetReference` (user_id, list_type, foreign 필드 UPDATE)
+- `RemoveReference` → `SQLStore.ClearReference` (list_type을 빈 문자열로)
+- `BumpReference` → `SQLStore.SetPinned(true)` (is_pinned 플래그)
+- `GetAndCompleteIssue` → `SQLStore.CompleteTodoItem` (soft-delete: status='done')
+- `GetList` → `SQLStore.GetListItems` (status='open' 필터, is_pinned DESC 정렬)
+
+### 대시보드 집계 쿼리
+
+| 메서드 | 용도 |
+|--------|------|
+| `GetTodoSummary` | 개인 일일 요약 (해결/지연 건수) |
+| `GetTodoStatusSummary` | 개인 상태 요약 (미완료/오늘마감/지연) |
+| `GetMemberTodoStats` | 팀 멤버별 Todo 통계 |
+| `GetOrgResolvedCount` | 조직 전체 해결 건수 |
+| `GetMVPRemainingCount` | MVP 태그 잔여 건수 |
+
+### KV→DB 마이그레이션
+
+`OnActivate` 시 클러스터 뮤텍스 하에서 자동 실행:
+1. `TODO_System` 테이블에서 마이그레이션 완료 플래그 확인
+2. KV의 `order_*`, `item_*` 키를 스캔하여 `todo_items`에 INSERT
+3. `ON CONFLICT DO NOTHING`으로 멱등성 보장
+4. 기존 KV 데이터는 삭제하지 않음 (안전 롤백 가능)
+
+## KV 스토어 (레거시)
+
+리마인더/사용자 설정은 여전히 KV 스토어 사용:
+
+| 키 패턴 | 용도 |
+|---------|------|
+| `reminder_{userID}` | 마지막 리마인더 시각 |
+| `reminder_enabled_{userID}` | 리마인더 사용 여부 |
+| `allow_incoming_task_{userID}` | 수신 허용 여부 |
+
+KV ListStore(`store.go`)는 레거시로 유지되며, 현재 `OnActivate`에서는 `sqlListStore`를 사용합니다.
+
+## 주요 도메인 모델
+
+### Issue (`issue.go`)
+```go
+type Issue struct {
+    ID, Message, PostPermalink, Description, PostID string
+    CreateAt int64
+    // DB 마이그레이션 이후 추가된 필드
+    ListType, Status, AssigneeID, Tags string
+    DueDate, UpdateAt, CompletedAt int64
+    IsPinned bool
+    ForeignUserID, ForeignIssueID string
+}
+type ExtendedIssue struct { Issue; ForeignUser, ForeignList string; ForeignPosition int }
+type ListsIssue struct { In, My, Out []*ExtendedIssue }
+```
+
+### TodoItem (`sqlstore/todo_store.go`)
+```go
+type TodoItem struct {
+    ID, UserID, ListType, Message, Status string
+    Description, PostPermalink, PostID *string
+    DueDate, CompletedAt *int64
+    IsPinned bool
+    AssigneeID, Tags, ForeignUserID, ForeignIssueID *string
+    CreateAt, UpdateAt int64
+}
+```
+
+### IssueRef (`store.go`)
+```go
+type IssueRef struct { IssueID, ForeignIssueID, ForeignUserID string }
+```
+
+## REST API 엔드포인트
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| POST | `/add` | 할 일 추가/전송 |
+| GET | `/lists` | 전체 목록 조회 |
+| POST | `/remove` | 제거 |
+| POST | `/complete` | 완료 |
+| POST | `/accept` | 수락 |
+| POST | `/bump` | 인박스 상단 올리기 |
+| PUT | `/edit` | 수정 |
+| POST | `/change_assignment` | 담당자 변경 |
+| GET | `/config` | 클라이언트 설정 |
+| POST | `/telemetry` | 프론트 이벤트 추적 |

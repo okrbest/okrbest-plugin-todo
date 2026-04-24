@@ -21,12 +21,17 @@ let lastActivityTime = Number.MAX_SAFE_INTEGER;
 const activityTimeout = 60 * 60 * 1000; // 1 hour
 const {id: pluginId} = manifest;
 
-// IntlProvider로 래핑된 SidebarRight 컴포넌트
-const WrappedSidebarRight = (props) => (
+const withIntl = (Component) => (props) => (
     <IntlProviderWrapper>
-        <SidebarRight {...props} />
+        <Component {...props} />
     </IntlProviderWrapper>
 );
+
+const WrappedRoot = withIntl(Root);
+const WrappedAssigneeModal = withIntl(AssigneeModal);
+const WrappedSidebarRight = withIntl(SidebarRight);
+const WrappedTeamSidebar = withIntl(TeamSidebar);
+const WrappedPostTypeTodo = withIntl(PostTypeTodo);
 
 export default class Plugin {
     initialize(registry, store) {
@@ -44,10 +49,10 @@ export default class Plugin {
         const {toggleRHSPlugin, showRHSPlugin} = registry.registerRightHandSidebarComponent(WrappedSidebarRight, intl.formatMessage({id: 'SidebarRight.listHeading.myTodos', defaultMessage: 'Todo List'}));
 
         registry.registerReducer(reducer);
-        registry.registerRootComponent(Root);
-        registry.registerRootComponent(AssigneeModal);
+        registry.registerRootComponent(WrappedRoot);
+        registry.registerRootComponent(WrappedAssigneeModal);
 
-        registry.registerBottomTeamSidebarComponent(TeamSidebar);
+        registry.registerBottomTeamSidebarComponent(WrappedTeamSidebar);
 
         registry.registerPostDropdownMenuAction(
             intl.formatMessage({id: 'Plugin.postMenu.addTodo', defaultMessage: 'Add Todo'}),
@@ -103,7 +108,7 @@ export default class Plugin {
 
         document.addEventListener('click', activityFunc);
 
-        registry.registerPostTypeComponent('custom_todo', PostTypeTodo);
+        registry.registerPostTypeComponent('custom_todo', WrappedPostTypeTodo);
     }
 
     deinitialize() {

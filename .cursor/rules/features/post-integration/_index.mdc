@@ -1,0 +1,109 @@
+---
+description: 게시물 연동 (포스트 드롭다운, 커스텀 포스트 타입) 도메인
+globs: ["webapp/src/components/post_type_todo/**", "webapp/src/index.js"]
+---
+
+# 게시물 연동 (Post Integration) 도메인
+
+## 개요
+
+Mattermost 게시물(포스트)과 Todo 플러그인을 연동합니다.
+포스트에서 직접 Todo를 만들거나, 봇이 커스텀 포스트 타입으로 알림을 보냅니다.
+
+## 관련 파일
+
+| 영역 | 파일 |
+|------|------|
+| 커스텀 포스트 타입 | `webapp/src/components/post_type_todo/post_type_todo.jsx` |
+| 포스트 드롭다운 등록 | `webapp/src/index.js` (`registerPostDropdownMenuAction`) |
+| 서버 스레드 답글 | `server/bot.go` (`ReplyPostBot`) |
+| 서버 추가 핸들러 | `server/plugin.go` (`handleAdd`, `postReplyIfNeeded`) |
+
+## 기능 1: 포스트 드롭다운 "Add Todo"
+
+게시물의 `⋮` 메뉴에 "Add Todo" 항목을 추가합니다.
+
+```javascript
+registry.registerPostDropdownMenuAction(
+    intl.formatMessage({id: 'Plugin.postMenu.addTodo', defaultMessage: 'Add Todo'}),
+    (postID) => {
+        telemetry('post_action_click');
+        store.dispatch(openAddCard(postID));
+        store.dispatch(showRHSPlugin);
+    },
+);
+```
+
+**동작 흐름:**
+1. 사용자가 포스트의 "Add Todo" 클릭
+2. RHS가 열리고 추가 폼이 `postID`와 함께 표시
+3. Todo 제출 시 `PostPermalink`과 `PostID`가 함께 서버로 전송
+4. 서버가 해당 스레드에 봇 답글 생성
+
+## 기능 2: 커스텀 포스트 타입 (`custom_todo`)
+
+봇이 Todo 수신 알림을 보낼 때 사용하는 커스텀 포스트:
+
+```javascript
+registry.registerPostTypeComponent('custom_todo', PostTypeTodo);
+```
+
+서버에서 생성:
+```go
+p.PostBotCustomDM(receiverID, message, todo, postPermalink, issueID)
+// → type: "custom_todo"
+// → Props: { type, message, todo, postPermalink, issueId }
+```
+
+`PostTypeTodo` 컴포넌트가 이 포스트를 수락/거절 버튼이 있는 UI로 렌더링합니다.
+
+## 기능 3: 스레드 답글
+
+포스트에서 Todo를 만들거나, 해당 Todo가 완료/제거/pop 되면 원본 스레드에 봇이 답글:
+
+```go
+func (p *Plugin) ReplyPostBot(postID, message, todo, postPermalink string) error {
+    post, _ := p.API.GetPost(postID)
+    rootID := post.Id
+    if post.RootId != "" {
+        rootID = post.RootId  // 이미 스레드의 답글이면 루트로 이동
+    }
+    p.API.CreatePost(&model.Post{
+        UserId:    p.BotUserID,
+        ChannelId: post.ChannelId,
+        Message:   message + quotedTodo,
+        RootId:    rootID,
+    })
+}
+```
+
+### 스레드 답글 발생 시점
+
+| 액션 | 메시지 |
+|------|--------|
+| Todo 추가 | "@user attached a todo to this thread" |
+| Todo 전송 | "@sender sent @receiver a todo attached to this thread" |
+| Todo 완료 | "@user completed a todo attached to this thread" |
+| Todo 제거 | "@user removed a todo attached to this thread" |
+| Todo pop | "@user popped a todo attached to this thread" |
+
+## 커스텀 포스트 `pendingAnswer` 조건
+
+`PostTypeTodo` 컴포넌트에서 액션 버튼(Accept/Complete/Remove)은 **`pendingAnswer`가 true일 때만** 표시됩니다.
+
+```javascript
+// post_type_todo/index.js
+pendingAnswer = inIssues.some(issue => issue.id === post.props.issueId)
+```
+
+사용자의 In 목록에 해당 `issueId`가 아직 존재할 때만 버튼을 보여주므로, 이미 수락/거절한 Todo의 DM 포스트에서는 버튼이 사라집니다.
+
+---
+
+## Q&A 목록
+
+> 개발 중 생긴 질문들이 `q-{주제}.mdc` 파일로 이 폴더에 추가됩니다.
+
+| 질문 | 파일 |
+|------|------|
+| (새 질문이 생기면 여기에 추가) | |
