@@ -98,7 +98,7 @@ AssigneeForm.propTypes = {
     theme: PropTypes.object.isRequired,
     autocompleteUsers: PropTypes.func.isRequired,
     getAssignee: PropTypes.func.isRequired,
-    editingTodo: PropTypes.string.isRequired,
+    editingTodo: PropTypes.string,
     removeAssignee: PropTypes.func.isRequired,
     removeEditingTodo: PropTypes.func.isRequired,
     changeAssignee: PropTypes.func.isRequired,

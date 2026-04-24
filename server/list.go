@@ -16,13 +16,19 @@ const (
 	OutListKey = "_out"
 )
 
-// ListStore represents the KVStore operations for lists
+// ListStore represents the store operations for lists
 type ListStore interface {
 	// Issue related function
 	SaveIssue(issue *Issue) error
 	GetIssue(issueID string) (*Issue, error)
+	// RemoveIssue hard-deletes the issue. Used only for rollback of failed operations.
 	RemoveIssue(issueID string) error
+	// GetAndRemoveIssue retrieves the issue then soft-deletes it
+	// (status='deleted') to preserve data for dashboard analytics.
 	GetAndRemoveIssue(issueID string) (*Issue, error)
+	// GetAndCompleteIssue retrieves the issue then soft-deletes it
+	// (status='done', completed_at=now) to preserve data for dashboard analytics.
+	GetAndCompleteIssue(issueID string) (*Issue, error)
 
 	// Issue References related functions
 
@@ -33,7 +39,7 @@ type ListStore interface {
 	RemoveReference(userID, issueID, listID string) error
 	// PopReference removes the first IssueRef in listID for userID and returns it
 	PopReference(userID, listID string) (*IssueRef, error)
-	// BumpReference moves the Issue reference for issueID in listID for userID to the beginning of the list
+	// BumpReference pins the issue (is_pinned=true) so it appears at the top of the list
 	BumpReference(userID, issueID, listID string) error
 	// GetIssueReference gets the IssueRef and position of the issue issueID on user userID's list listID
 	GetIssueReference(userID, issueID, listID string) (*IssueRef, int, error)
@@ -48,10 +54,10 @@ type listManager struct {
 	api   plugin.API
 }
 
-// NewListManager creates a new listManager
-func NewListManager(api plugin.API) ListManager {
+// NewListManager creates a new listManager with the given store implementation.
+func NewListManager(api plugin.API, store ListStore) ListManager {
 	return &listManager{
-		store: NewListStore(api),
+		store: store,
 		api:   api,
 	}
 }
@@ -159,19 +165,19 @@ func (l *listManager) CompleteIssue(userID, issueID string) (issue *Issue, forei
 		return nil, "", issueList, fmt.Errorf("cannot find element")
 	}
 
-	if err = l.store.RemoveReference(userID, issueID, issueList); err != nil {
-		return nil, "", issueList, err
-	}
-
-	issue, err = l.store.GetAndRemoveIssue(issueID)
+	// Soft-complete: sets status='done' and completed_at=now.
+	// The row stays in the DB for dashboard analytics (resolved_count, etc.).
+	// GetListItems filters by status='open', so it will no longer appear in active lists.
+	issue, err = l.store.GetAndCompleteIssue(issueID)
 	if err != nil {
-		l.api.LogError("cannot remove issue, Err=", err.Error())
+		l.api.LogError("cannot complete issue, Err=", err.Error())
 	}
 
 	if ir.ForeignUserID == "" {
 		return issue, "", issueList, nil
 	}
 
+	// Soft-delete the sender's copy (status='deleted') for dashboard analytics.
 	err = l.store.RemoveReference(ir.ForeignUserID, ir.ForeignIssueID, OutListKey)
 	if err != nil {
 		l.api.LogError("cannot clean foreigner list after complete, Err=", err.Error())

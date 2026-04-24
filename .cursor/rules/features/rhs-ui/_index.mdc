@@ -1,0 +1,137 @@
+---
+description: RHS(Right Hand Sidebar) UI 도메인
+globs: ["webapp/src/components/sidebar_right/**", "webapp/src/components/todo_issues/**", "webapp/src/components/todo_item/**", "webapp/src/components/add_issue/**", "webapp/src/components/buttons/**"]
+---
+
+# RHS UI (Right Hand Sidebar) 도메인
+
+## 개요
+
+오른쪽 사이드바에서 Todo 목록을 조회하고 관리하는 메인 UI입니다.
+채널 헤더 버튼, App Bar, 팀 사이드바 버튼으로 열 수 있습니다.
+
+## 관련 파일
+
+| 영역 | 파일 |
+|------|------|
+| RHS 메인 | `webapp/src/components/sidebar_right/sidebar_right.jsx` |
+| 이슈 목록 | `webapp/src/components/todo_issues/todo_issues.jsx` |
+| 개별 아이템 | `webapp/src/components/todo_item/todo_item.jsx` |
+| 퍼머링크 | `webapp/src/components/todo_item/post_permalink.tsx` |
+| 추가 폼 | `webapp/src/components/add_issue/add_issue.jsx` |
+| 액션 버튼 | `webapp/src/components/buttons/{accept,complete,remove,bump}.jsx` |
+| 채널 헤더 | `webapp/src/components/channel_header_button/channel_header_button.tsx` |
+| 팀 사이드바 | `webapp/src/components/team_sidebar/team_sidebar.jsx` |
+| 담당자 모달 | `webapp/src/components/assignee_modal/assignee_modal.jsx` |
+| 담당자 폼 | `webapp/src/components/assignee_modal/assignee_form.jsx` (i18n 적용, useEscapeKey 훅) |
+| 사용자 검색 | `webapp/src/components/user_selector/autocomplete_selector.tsx` |
+| 스타일 | `**/sidebar_right.scss`, `**/_todo-item.scss`, `**/add_issue.scss` |
+
+## RHS 열기 방법
+
+1. **채널 헤더 버튼** — `toggleRHSPlugin` 디스패치
+2. **App Bar 아이콘** — `toggleRHSPlugin` 디스패치
+3. **팀 사이드바 버튼** — `showRHSPlugin` 디스패치 (`hide_team_sidebar` 설정으로 숨김 가능)
+4. **포스트 드롭다운 "Add Todo"** — `showRHSPlugin` 디스패치 + 추가 폼 열기
+
+## 컴포넌트 계층
+
+```
+SidebarRight
+├── AddIssue (Todo 추가 폼)
+├── TodoIssues (목록 탭: In / My / Out)
+│   └── TodoItem (개별 아이템)
+│       ├── PostPermalink (포스트 링크)
+│       └── Buttons (목록 종류에 따라 다른 액션)
+│           ├── AcceptButton (In 목록)
+│           ├── CompleteButton (My 목록)
+│           ├── RemoveButton (공통)
+│           └── BumpButton (Out 목록)
+└── AssigneeModal (담당자 변경)
+    └── AutocompleteSelector (사용자 검색)
+```
+
+## 목록별 액션 버튼
+
+| 목록 | 사용 가능한 버튼 |
+|------|-----------------|
+| In (받은 목록) | Accept, Remove(거절) |
+| My (내 목록) | Complete, Remove, Edit, ChangeAssignee |
+| Out (보낸 목록) | Remove, Bump |
+
+## 키보드 단축키
+
+| 단축키 | 동작 |
+|--------|------|
+| `Alt + A` | Todo 추가 폼 열기 (RHS 열린 상태에서) |
+| `Enter` | 인라인 편집 저장 |
+| `Escape` | 인라인 편집 취소 |
+
+## Undo 토스트 패턴
+
+완료/삭제 시 **5초 지연 실행 + Undo** 패턴:
+
+```javascript
+// 완료 시
+openTodoToast({icon: 'check', message: 'Todo completed', undo: undoCompleteTodo});
+setHidden(true);
+completeTimeout = setTimeout(() => complete(issue.id), 5000);
+
+// Undo 시
+clearTimeout(completeTimeout);
+setHidden(false);
+```
+
+`widget/todo_toast/todo_toast.tsx`로 렌더링.
+
+## 인라인 편집
+
+TodoItem에서 케밥 메뉴 "Edit todo" 클릭 시:
+- `TextareaAutosize`로 제목/설명 인라인 편집
+- Enter 저장, Escape 취소, Cancel/Save 버튼
+
+## 케밥 메뉴 (⋮)
+
+`MenuWrapper` + `Menu` + `MenuItem` 위젯으로 구성:
+
+| 메뉴 항목 | 단축키 | 조건 |
+|-----------|--------|------|
+| Accept todo | - | In 목록만 |
+| Bump | - | Out 목록만 |
+| Edit todo | `e` | 항상 |
+| Assign to… | `a` | 항상 |
+| Delete todo | `d` | canRemove 조건 |
+
+## 마크다운 렌더링
+
+`window.PostUtils.formatText()` + `messageHtmlToComponent()`로 Mattermost 마크다운 렌더링 (메시지, 설명 모두).
+
+## Inbox/My 접기
+
+My 목록 뷰에서 Incoming Todos와 My Todos를 각각 접을 수 있는 chevron 토글. 텔레메트리: `toggle_inbox`, `toggle_my`.
+
+## My / Sent 전환
+
+RHS 헤더 드롭다운 메뉴로 "My Todos" ↔ "Sent Todos" 전환.
+
+## Redux 상태
+
+| 상태 | 용도 |
+|------|------|
+| `allIssues` | `{my: [], in: [], out: []}` |
+| `addCardVisible` | 추가 폼 열림/닫힘 |
+| `editingTodo` | 편집 중인 이슈 ID |
+| `assigneeModalVisible` | 담당자 모달 열림/닫힘 |
+| `currentAssignee` | 선택된 담당자 |
+| `todoToast` | 토스트 메시지 |
+| `isRhsVisible` | RHS 가시성 |
+
+---
+
+## Q&A 목록
+
+> 개발 중 생긴 질문들이 `q-{주제}.mdc` 파일로 이 폴더에 추가됩니다.
+
+| 질문 | 파일 |
+|------|------|
+| (새 질문이 생기면 여기에 추가) | |

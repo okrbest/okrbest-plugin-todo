@@ -1,0 +1,98 @@
+---
+description: 일일 리마인더 기능 도메인
+globs: ["server/plugin.go", "server/store.go"]
+---
+
+# 일일 리마인더 (Daily Reminder) 도메인
+
+## 개요
+
+사용자가 할 일이 있으면, 하루에 한 번 봇 DM으로 요약을 발송합니다.
+웹앱의 활동 감지와 서버의 리마인더 로직이 결합되어 동작합니다.
+
+## 관련 파일
+
+| 영역 | 파일 |
+|------|------|
+| 리마인더 로직 | `server/plugin.go` `handleLists()` |
+| KV 저장 | `server/store.go` (reminder 관련 함수들, 여전히 KV 사용) |
+| Todo 목록 조회 | `server/list.go` → `server/sql_list_store.go` → `server/sqlstore/todo_store.go` |
+| 웹앱 트리거 | `webapp/src/actions.js` `fetchAllIssueLists(true)` |
+| 활동 감지 | `webapp/src/index.js` (activityFunc) |
+
+## 동작 흐름
+
+```
+1. 웹앱: 1시간 비활동 후 클릭 → fetchAllIssueLists(reminder=true)
+2. 서버: GET /lists?reminder=true
+3. 서버: 할 일 목록이 비어있지 않으면:
+   a. 사용자의 리마인더 설정 확인 (getReminderPreference)
+   b. 마지막 리마인더 시각 확인 (getLastReminderTimeForUser)
+   c. 타임존 기반 날짜 비교
+   d. 조건 충족 시 봇 DM 발송
+```
+
+## 리마인더 조건
+
+다음 **모든 조건**을 충족할 때 발송:
+
+1. `reminder=true` 쿼리 파라미터가 있음
+2. My 목록에 할 일이 1개 이상 있음
+3. 사용자의 리마인더 설정이 `on` (기본값: `on`)
+4. 마지막 리마인더로부터 **1시간 이상** 경과
+5. 마지막 리마인더와 **날짜가 다름** (타임존 기반)
+
+```go
+nt := time.Unix(now/1000, 0).In(timezone)
+lt := time.Unix(lastReminderAt/1000, 0).In(timezone)
+if nt.Sub(lt).Hours() >= 1 &&
+   (nt.Day() != lt.Day() || nt.Month() != lt.Month() || nt.Year() != lt.Year()) {
+    // 리마인더 발송
+}
+```
+
+## 타임존 처리
+
+웹앱이 `X-Timezone-Offset` 헤더로 클라이언트 타임존 오프셋(분 단위)을 전달:
+
+```go
+offset, _ := strconv.Atoi(r.Header.Get("X-Timezone-Offset"))
+timezone = time.FixedZone("local", -60*offset)
+```
+
+## KV 저장 (리마인더 전용 — DB 미이관)
+
+| 키 | 형식 | 설명 |
+|----|------|------|
+| `reminder_{userID}` | 밀리초 문자열 | 마지막 리마인더 시각 |
+| `reminder_enabled_{userID}` | "true"/"false" | 리마인더 사용 여부 (기본: true) |
+
+> Todo 목록 데이터는 PostgreSQL `todo_items` 테이블에서 조회하지만, 리마인더 시각/설정은 여전히 KV에 저장됩니다.
+
+## 사용자 설정
+
+- `/todo settings summary on` → 리마인더 활성화
+- `/todo settings summary off` → 리마인더 비활성화
+- 기본값: `on` (preferenceByte가 nil이면 true 반환)
+
+## 웹앱 활동 감지
+
+```javascript
+const activityTimeout = 60 * 60 * 1000; // 1시간
+document.addEventListener('click', () => {
+    if (now - lastActivityTime > activityTimeout) {
+        store.dispatch(fetchAllIssueLists(true)); // reminder=true
+    }
+    lastActivityTime = now;
+});
+```
+
+---
+
+## Q&A 목록
+
+> 개발 중 생긴 질문들이 `q-{주제}.mdc` 파일로 이 폴더에 추가됩니다.
+
+| 질문 | 파일 |
+|------|------|
+| (새 질문이 생기면 여기에 추가) | |

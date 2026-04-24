@@ -1,0 +1,93 @@
+---
+description: WebSocket 실시간 동기화 도메인
+globs: ["server/plugin.go", "webapp/src/index.js"]
+---
+
+# WebSocket 실시간 동기화 도메인
+
+## 개요
+
+할 일 목록이나 설정이 변경될 때 WebSocket을 통해 관련 사용자의 웹앱을 실시간으로 갱신합니다.
+Mattermost의 플러그인 WebSocket 인프라를 활용합니다.
+
+## 관련 파일
+
+| 영역 | 파일 |
+|------|------|
+| 서버 이벤트 발행 | `server/plugin.go` (`sendRefreshEvent`, `sendConfigUpdateEvent`) |
+| 웹앱 이벤트 수신 | `webapp/src/index.js` (`registerWebSocketEventHandler`) |
+| Redux 갱신 | `webapp/src/actions.js` (`fetchAllIssueLists`) |
+
+## 이벤트 타입
+
+### 1. `refresh` — 목록 새로고침
+
+```go
+const WSEventRefresh = "refresh"
+
+p.API.PublishWebSocketEvent(
+    WSEventRefresh,
+    map[string]interface{}{"lists": lists},  // 예: ["", "_in", "_out"]
+    &model.WebsocketBroadcast{UserId: userID},  // 특정 사용자에게만
+)
+```
+
+**웹앱 수신:**
+```javascript
+registry.registerWebSocketEventHandler(
+    `custom_${pluginId}_refresh`,
+    () => store.dispatch(fetchAllIssueLists())
+);
+```
+
+### 2. `config_update` — 설정 동기화
+
+```go
+const WSEventConfigUpdate = "config_update"
+
+p.API.PublishWebSocketEvent(
+    WSEventConfigUpdate,
+    map[string]interface{}{"hide_team_sidebar": p.configuration.HideTeamSidebar},
+    &model.WebsocketBroadcast{},  // 모든 사용자에게
+)
+```
+
+**웹앱 수신:**
+```javascript
+registry.registerWebSocketEventHandler(
+    `custom_${pluginId}_config_update`,
+    ({data}) => store.dispatch(setHideTeamSidebar(data.hide_team_sidebar))
+);
+```
+
+## 이벤트 발행 시점
+
+| 액션 | refresh 대상 | 갱신 목록 |
+|------|-------------|-----------|
+| 할 일 추가 | 본인 | `[MyListKey]` |
+| 할 일 전송 | 본인 + 수신자 | `[OutListKey]` + `[InListKey]` |
+| 수락 | 본인 + 발신자 | `[MyListKey, InListKey]` + `[OutListKey]` |
+| 완료 | 본인 + 상대방 | `[listToUpdate]` + `[OutListKey]` |
+| 제거 | 본인 + 상대방 | `[listToUpdate]` + `[InListKey 또는 OutListKey]` |
+| Bump | 수신자 | `[InListKey]` |
+| 편집 | 본인 + 상대방 | `[list]` + `[MyListKey,InListKey 또는 OutListKey]` |
+| 담당자 변경 | 본인 + 새담당 + 기존담당 | 각각 관련 목록 |
+| 설정 변경 | **모든 사용자** | config_update 이벤트 |
+
+## 재연결
+
+`registerReconnectHandler`로 WebSocket 재연결 시에도 자동 새로고침:
+
+```javascript
+registry.registerReconnectHandler(() => store.dispatch(fetchAllIssueLists()));
+```
+
+---
+
+## Q&A 목록
+
+> 개발 중 생긴 질문들이 `q-{주제}.mdc` 파일로 이 폴더에 추가됩니다.
+
+| 질문 | 파일 |
+|------|------|
+| (새 질문이 생기면 여기에 추가) | |

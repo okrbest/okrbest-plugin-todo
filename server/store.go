@@ -122,6 +122,11 @@ func (l *listStore) GetAndRemoveIssue(issueID string) (*Issue, error) {
 	return issue, nil
 }
 
+// GetAndCompleteIssue in KV mode falls back to hard delete (KV has no soft-delete).
+func (l *listStore) GetAndCompleteIssue(issueID string) (*Issue, error) {
+	return l.GetAndRemoveIssue(issueID)
+}
+
 func (l *listStore) GetIssueReference(userID, issueID, listID string) (*IssueRef, int, error) {
 	originalJSONList, err := l.api.KVGet(listKey(userID, listID))
 	if err != nil {

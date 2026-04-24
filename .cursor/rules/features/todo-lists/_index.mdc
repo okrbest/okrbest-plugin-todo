@@ -1,0 +1,168 @@
+---
+description: Todo 목록(My/In/Out) 관리 도메인
+globs: ["server/list.go", "server/store.go", "server/sql_list_store.go", "server/issue.go", "server/sqlstore/**", "webapp/src/components/todo_issues/**", "webapp/src/components/todo_item/**"]
+---
+
+# Todo 목록 (Lists) 도메인
+
+## 개요
+
+사용자별 3개 목록으로 할 일을 관리합니다.
+PostgreSQL `todo_items` 단일 테이블에 저장하며, `user_id` + `list_type` + `status`로 목록을 구분합니다.
+기존 KV 스토어 데이터는 플러그인 활성화 시 자동으로 DB로 마이그레이션됩니다.
+
+## 3개 목록
+
+| 목록 | 키 | 설명 |
+|------|-----|------|
+| My | `""` (MyListKey) | 내가 만들거나 수락한 할 일 |
+| In | `"_in"` (InListKey) | 다른 사용자로부터 받은 할 일 (수락 대기) |
+| Out | `"_out"` (OutListKey) | 내가 다른 사용자에게 보낸 할 일 |
+
+## 관련 파일
+
+| 영역 | 파일 |
+|------|------|
+| 비즈니스 로직 | `server/list.go` (ListManager 인터페이스 + listManager 구현체) |
+| ListStore 인터페이스 | `server/list.go` (ListStore 인터페이스 정의) |
+| SQL 어댑터 | `server/sql_list_store.go` (sqlListStore: SQLStore→ListStore) |
+| SQL 저장소 | `server/sqlstore/todo_store.go` (TodoItem CRUD + 집계 쿼리) |
+| SQL 스키마 | `server/sqlstore/migrations.go` (DDL 마이그레이션) |
+| KV→DB 이관 | `server/sqlstore/kv_migration.go` (자동 데이터 마이그레이션) |
+| KV 스토어 (레거시) | `server/store.go` (listStore 구현체, 리마인더/설정용) |
+| 도메인 모델 | `server/issue.go` (Issue, ExtendedIssue, ListsIssue) |
+| 웹앱 목록 | `webapp/src/components/todo_issues/todo_issues.jsx` |
+| 웹앱 아이템 | `webapp/src/components/todo_item/todo_item.jsx` |
+| Redux | `webapp/src/reducer.js` (allIssues 상태) |
+
+## 데이터 모델
+
+### Issue (`issue.go`)
+```go
+type Issue struct {
+    ID, Message, PostPermalink, Description, PostID string
+    CreateAt int64
+    // DB 마이그레이션 이후 추가된 필드
+    ListType, Status, AssigneeID, Tags string
+    DueDate, UpdateAt, CompletedAt int64
+    IsPinned bool
+    ForeignUserID, ForeignIssueID string
+}
+```
+
+### TodoItem (`sqlstore/todo_store.go`) — DB 행 매핑
+```go
+type TodoItem struct {
+    ID, UserID, ListType, Message, Status string
+    Description, PostPermalink, PostID *string
+    DueDate, CompletedAt *int64
+    IsPinned bool
+    AssigneeID, Tags, ForeignUserID, ForeignIssueID *string
+    CreateAt, UpdateAt int64
+}
+```
+
+### IssueRef (인메모리 참조, ListStore 인터페이스용)
+```go
+type IssueRef struct {
+    IssueID        string `json:"issue_id"`
+    ForeignIssueID string `json:"foreign_issue_id"`
+    ForeignUserID  string `json:"foreign_user_id"`
+}
+```
+
+한 이슈가 두 사용자(sender/receiver)에게 전송되면, 각자 **별도 TodoItem 행**이 생성됩니다.
+
+### DB 저장 방식 (`todo_items` 테이블)
+
+| 컬럼 | 역할 |
+|------|------|
+| `user_id` + `list_type` | 어떤 사용자의 어떤 목록에 속하는지 (my/in/out) |
+| `status` | `open` (활성) 또는 `done` (완료, soft-delete) |
+| `foreign_user_id` + `foreign_issue_id` | 상대방 연결 (sender↔receiver) |
+| `is_pinned` | Bump 시 true → 정렬에서 최상단 표시 |
+| `due_date` | 마감일 (대시보드 집계에 사용) |
+| `completed_at` | 완료 시각 (대시보드 해결 건수에 사용) |
+
+### 레거시 KV 키 패턴 (마이그레이션 소스)
+
+| 키 | 저장 형식 | 비고 |
+|----|-----------|------|
+| `order_{userID}` | `[]*IssueRef` JSON | → `list_type='my'`로 마이그레이션 |
+| `order_{userID}_in` | `[]*IssueRef` JSON | → `list_type='in'`으로 마이그레이션 |
+| `order_{userID}_out` | `[]*IssueRef` JSON | → `list_type='out'`으로 마이그레이션 |
+| `item_{issueID}` | `*Issue` JSON | → `todo_items` 행으로 마이그레이션 |
+
+## 주요 흐름
+
+### 할 일 추가 (AddIssue)
+1. Issue 생성 → `SaveTodoItem` (placeholder user_id로 INSERT)
+2. `SetReference` → user_id, list_type='my' 로 UPDATE
+
+### 할 일 전송 (SendIssue)
+1. sender용 Issue 생성 → `SaveTodoItem`
+2. receiver용 Issue 별도 생성 → `SaveTodoItem`
+3. sender: `SetReference` (list_type='out', foreign=receiver)
+4. receiver: `SetReference` (list_type='in', foreign=sender)
+5. 실패 시 각 단계 롤백
+
+### 할 일 수락 (AcceptIssue)
+1. InList에서 IssueRef 가져옴
+2. MyList에 `AddReference` (list_type='my'로 변경)
+3. InList에서 `RemoveReference` (list_type 비움)
+
+### 할 일 완료 (CompleteIssue) — Soft-delete
+1. `GetAndCompleteIssue` → status='done', completed_at=now (행은 유지)
+2. `GetListItems`는 status='open' 필터이므로 활성 목록에서 제외됨
+3. 상대방(sender)의 OutList 참조 제거 + 상대방 Issue 하드 삭제
+
+### 할 일 편집 (EditIssue)
+1. Issue 조회 → 메시지/설명 수정 (`SaveTodoItem` UPSERT)
+2. ForeignIssue도 있으면 동일하게 수정
+3. 상대방에게 "modified" 봇 DM
+4. 양쪽 WebSocket refresh
+
+### 담당자 변경 (ChangeAssignment)
+1. 현재 이슈의 소유권 확인 (InList 또는 수락된 MyList는 변경 불가)
+2. 기존 상대방 참조 + Issue 제거
+3. 새 receiver용 Issue 생성 → OutList/InList 참조 재구성
+4. 기존 담당자에게 "removed" DM, 새 담당자에게 CustomDM
+
+### Bump (BumpIssue)
+1. sender의 OutList에서 IssueRef 조회
+2. receiver의 InList에서 해당 이슈의 `is_pinned=true` 설정 (`SetPinned`)
+3. `GetListItems` 정렬이 `is_pinned DESC` → 자동으로 최상단에 표시
+4. receiver에게 CustomDM 재알림
+
+## 목록 정렬 규칙
+
+`GetListItems`의 ORDER BY:
+```sql
+is_pinned DESC, due_date ASC NULLS LAST, create_at ASC
+```
+1. 고정(Bump)된 항목이 최상단
+2. 마감일이 가까운 순
+3. 생성일이 오래된 순
+
+## 레거시 호환
+
+### KV→DB 마이그레이션 (`kv_migration.go`)
+플러그인 활성화 시 자동 실행:
+1. `TODO_System.KVMigrationDone` 플래그 확인 (이미 완료 시 스킵)
+2. KV의 `order_*` 키에서 리스트 참조, `item_*` 키에서 이슈 본문 로드
+3. `todo_items`에 `INSERT ... ON CONFLICT DO NOTHING`
+4. 기존 KV 데이터는 삭제하지 않음 (안전 롤백)
+
+### KV ListStore (`store.go`)
+레거시 KV 기반 구현체가 유지되지만, 현재 `OnActivate`에서는 `sqlListStore`가 사용됩니다.
+`legacyIssueRef()`: 구버전 `[]string` 형식을 `[]*IssueRef`로 변환.
+
+---
+
+## Q&A 목록
+
+> 개발 중 생긴 질문들이 `q-{주제}.mdc` 파일로 이 폴더에 추가됩니다.
+
+| 질문 | 파일 |
+|------|------|
+| (새 질문이 생기면 여기에 추가) | |

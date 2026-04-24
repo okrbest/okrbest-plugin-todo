@@ -15,6 +15,18 @@ type Issue struct {
 	Description   string `json:"description,omitempty"`
 	CreateAt      int64  `json:"create_at"`
 	PostID        string `json:"post_id"`
+
+	// Fields added for dashboard-api-spec (KV->DB migration)
+	ListType       string `json:"list_type,omitempty"`
+	Status         string `json:"status,omitempty"`
+	DueDate        int64  `json:"due_date,omitempty"`
+	IsPinned       bool   `json:"is_pinned,omitempty"`
+	AssigneeID     string `json:"assignee_id,omitempty"`
+	Tags           string `json:"tags,omitempty"`
+	ForeignUserID  string `json:"foreign_user_id,omitempty"`
+	ForeignIssueID string `json:"foreign_issue_id,omitempty"`
+	UpdateAt       int64  `json:"update_at,omitempty"`
+	CompletedAt    int64  `json:"completed_at,omitempty"`
 }
 
 // ExtendedIssue extends the information on Issue to be used on the front-end
