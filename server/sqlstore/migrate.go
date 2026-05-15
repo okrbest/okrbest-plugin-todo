@@ -1,63 +1,57 @@
 package sqlstore
 
 import (
-	"github.com/blang/semver"
+	"context"
+	"fmt"
+
+	"github.com/mattermost/morph"
+	"github.com/mattermost/morph/drivers/postgres"
+	"github.com/mattermost/morph/sources/embedded"
 	"github.com/pkg/errors"
+
+	_ "github.com/lib/pq"
 )
 
-// RunMigrations applies all pending schema migrations in sequence.
-// The caller should hold a cluster mutex if there is a danger of this being run
-// on multiple servers at once.
+const migrationTablePrefix = "todo"
+
 func (s *SQLStore) RunMigrations() error {
-	currentSchemaVersion, err := s.GetCurrentVersion()
+	driver, err := postgres.WithInstance(s.db.DB)
 	if err != nil {
-		return errors.Wrapf(err, "failed to get the current schema version")
+		return errors.Wrap(err, "failed to create migration driver")
 	}
 
-	if currentSchemaVersion.LT(LatestVersion()) {
-		if err := s.runMigrationsLegacy(currentSchemaVersion); err != nil {
-			return errors.Wrapf(err, "failed to complete migrations")
-		}
-	}
-
-	return nil
-}
-
-func (s *SQLStore) runMigrationsLegacy(originalSchemaVersion semver.Version) error {
-	currentSchemaVersion := originalSchemaVersion
-	for _, migration := range migrations {
-		if !currentSchemaVersion.EQ(migration.fromVersion) {
-			continue
-		}
-
-		if err := s.applyMigration(migration); err != nil {
-			return err
-		}
-
-		currentSchemaVersion = migration.toVersion
-	}
-
-	return nil
-}
-
-func (s *SQLStore) applyMigration(migration Migration) error {
-	tx, err := s.db.Beginx()
+	assetsList, err := Assets.ReadDir("migrations")
 	if err != nil {
-		return errors.Wrap(err, "could not begin transaction")
-	}
-	defer s.finalizeTransaction(tx)
-
-	if err := migration.migrationFunc(tx, s); err != nil {
-		return errors.Wrapf(err, "error executing migration from version %s to version %s",
-			migration.fromVersion.String(), migration.toVersion.String())
+		return errors.Wrap(err, "failed to read migration assets")
 	}
 
-	if err := s.SetCurrentVersion(tx, migration.toVersion); err != nil {
-		return errors.Wrapf(err, "failed to set the current version to %s", migration.toVersion.String())
+	assetNames := make([]string, len(assetsList))
+	for i, entry := range assetsList {
+		assetNames[i] = entry.Name()
 	}
 
-	if err := tx.Commit(); err != nil {
-		return errors.Wrap(err, "could not commit transaction")
+	src, err := embedded.WithInstance(&embedded.AssetSource{
+		Names: assetNames,
+		AssetFunc: func(name string) ([]byte, error) {
+			return Assets.ReadFile("migrations/" + name)
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "failed to create migration source")
+	}
+
+	engine, err := morph.New(context.Background(), driver, src,
+		morph.WithLock(fmt.Sprintf("%s-migration-lock", migrationTablePrefix)),
+		morph.SetMigrationTableName(fmt.Sprintf("%s_schema_migrations", migrationTablePrefix)),
+		morph.SetStatementTimeoutInSeconds(100000),
+	)
+	if err != nil {
+		return errors.Wrap(err, "failed to create migration engine")
+	}
+	defer engine.Close()
+
+	if err := engine.ApplyAll(); err != nil {
+		return errors.Wrap(err, "failed to apply migrations")
 	}
 
 	return nil

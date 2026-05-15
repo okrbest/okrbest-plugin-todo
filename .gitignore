@@ -1,4 +1,5 @@
 dist
 .DS_Store
+.idea/
 webapp/src/manifest.ts
 server/manifest.go

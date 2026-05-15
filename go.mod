@@ -6,10 +6,11 @@ toolchain go1.22.8
 
 require (
 	github.com/Masterminds/squirrel v1.5.4
-	github.com/blang/semver v3.5.1+incompatible
 	github.com/gorilla/mux v1.8.1
 	github.com/jmoiron/sqlx v1.4.0
+	github.com/lib/pq v1.10.9
 	github.com/mattermost/mattermost/server/public v0.1.9
+	github.com/mattermost/morph v1.1.0
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
@@ -34,7 +35,6 @@ require (
 	github.com/hashicorp/yamux v0.1.1 // indirect
 	github.com/lann/builder v0.0.0-20180802200727-47ae307949d0 // indirect
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
-	github.com/lib/pq v1.10.9 // indirect
 	github.com/mattermost/go-i18n v1.11.1-0.20211013152124-5c415071e404 // indirect
 	github.com/mattermost/ldap v0.0.0-20231116144001-0f480c025956 // indirect
 	github.com/mattermost/logr/v2 v2.0.21 // indirect
@@ -46,6 +46,7 @@ require (
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/philhofer/fwd v1.1.3-0.20240612014219-fbbf4953d986 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
+	github.com/remyoudompheng/bigfft v0.0.0-20200410134404-eec4a21b6bb0 // indirect
 	github.com/rogpeppe/go-internal v1.12.0 // indirect
 	github.com/rudderlabs/analytics-go v3.3.3+incompatible // indirect
 	github.com/segmentio/backo-go v1.1.0 // indirect
@@ -69,4 +70,8 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	modernc.org/libc v1.16.7 // indirect
+	modernc.org/mathutil v1.4.1 // indirect
+	modernc.org/memory v1.1.1 // indirect
+	modernc.org/sqlite v1.18.0 // indirect
 )
